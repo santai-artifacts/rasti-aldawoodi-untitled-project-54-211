@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a22;
+      --border: #2a2f3d;
+      --accent: #4ade80;
+      --accent-dim: #166534;
+      --food: #f97316;
+      --text: #e8eaf0;
+      --muted: #6b7280;
+      --danger: #ef4444;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 24px #4ade8055;
+      margin-bottom: 1.25rem;
+    }
+
+    .hud {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      min-width: 3ch;
+      text-align: center;
+    }
+
+    #score-val { color: var(--accent); }
+    #high-val  { color: var(--food); }
+
+    .canvas-wrap {
+      position: relative;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 40px #4ade8015, 0 8px 32px #00000066;
+    }
+
+    canvas {
+      display: block;
+      background: var(--surface);
+    }
+
+    /* Overlay for start/game-over */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: #0d0f14cc;
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2rem;
+      transition: opacity 0.25s;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text);
+    }
+
+    .overlay-title.game-over { color: var(--danger); text-shadow: 0 0 20px #ef444455; }
+
+    .overlay-sub {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #0a0d10;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.8rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 0 20px #4ade8044;
+    }
+
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 0 28px #4ade8077; }
+    .btn:active { transform: translateY(0); }
+
+    .controls-hint {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    .level-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--accent-dim);
+      background: #0d2718;
+      border: 1px solid var(--accent-dim);
+      border-radius: 999px;
+      padding: 0.15rem 0.65rem;
+    }
+
+    /* Mobile d-pad */
+    .dpad {
+      display: none;
+      margin-top: 1.2rem;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .dpad-row { display: flex; gap: 4px; }
+
+    .dpad-btn {
+      width: 52px;
+      height: 52px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .dpad-btn:active { background: var(--accent-dim); }
+
+    @media (max-width: 540px) {
+      .dpad { display: flex; }
+      h1 { font-size: 1.5rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn, .overlay { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Snake</h1>
+
+<div class="hud">
+  <div class="stat">
+    <span class="stat-label">Score</span>
+    <span class="stat-value" id="score-val">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Best</span>
+    <span class="stat-value" id="high-val">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Level</span>
+    <span class="stat-value" id="level-val">1</span>
+  </div>
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="c"></canvas>
+
+  <div class="overlay" id="overlay">
+    <div class="overlay-title" id="overlay-title">Snake</div>
+    <div class="overlay-sub" id="overlay-sub">Eat the orange dots. Don't hit yourself.</div>
+    <button class="btn" id="start-btn">Start Game</button>
+  </div>
+</div>
+
+<div class="controls-hint">
+  Arrow keys or WASD to move &nbsp;·&nbsp; Eat to grow &nbsp;·&nbsp; Speed increases each level
+</div>
+
+<div class="dpad">
+  <div class="dpad-row"><button class="dpad-btn" data-dir="UP">↑</button></div>
+  <div class="dpad-row">
+    <button class="dpad-btn" data-dir="LEFT">←</button>
+    <button class="dpad-btn" data-dir="DOWN">↓</button>
+    <button class="dpad-btn" data-dir="RIGHT">→</button>
+  </div>
+</div>
+
+<script>
+  const COLS = 24, ROWS = 24, CELL = 22;
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  canvas.width  = COLS * CELL;
+  canvas.height = ROWS * CELL;
+
+  const overlay     = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlay-title');
+  const overlaySub  = document.getElementById('overlay-sub');
+  const startBtn    = document.getElementById('start-btn');
+  const scoreEl     = document.getElementById('score-val');
+  const highEl      = document.getElementById('high-val');
+  const levelEl     = document.getElementById('level-val');
+
+  /* ── Colours pulled from CSS vars ── */
+  const C = {
+    bg:      '#161a22',
+    grid:    '#1c2030',
+    head:    '#4ade80',
+    body:    '#22c55e',
+    tail:    '#16a34a',
+    food:    '#f97316',
+    foodGlow:'#f9731640',
+    eye:     '#0a0d10',
+  };
+
+  /* ── State ── */
+  let snake, dir, nextDir, food, score, highScore = 0, level, speed, loop, alive;
+
+  const DIR = { UP:[0,-1], DOWN:[0,1], LEFT:[-1,0], RIGHT:[1,0] };
+  const OPP = { UP:'DOWN', DOWN:'UP', LEFT:'RIGHT', RIGHT:'LEFT' };
+
+  function levelSpeed(lvl) { return Math.max(60, 200 - (lvl - 1) * 18); }
+
+  function rand(max) { return Math.floor(Math.random() * max); }
+
+  function spawnFood() {
+    const occupied = new Set(snake.map(s => `${s[0]},${s[1]}`));
+    let f;
+    do { f = [rand(COLS), rand(ROWS)]; } while (occupied.has(`${f[0]},${f[1]}`));
+    return f;
+  }
+
+  function init() {
+    const mx = Math.floor(COLS / 2), my = Math.floor(ROWS / 2);
+    snake   = [[mx, my], [mx-1, my], [mx-2, my]];
+    dir     = DIR.RIGHT;
+    nextDir = DIR.RIGHT;
+    score   = 0;
+    level   = 1;
+    speed   = levelSpeed(1);
+    alive   = true;
+    food    = spawnFood();
+    updateHUD();
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = score;
+    highEl.textContent  = highScore;
+    levelEl.textContent = level;
+  }
+
+  /* ── Drawing ── */
+  function draw() {
+    // Background + grid
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = C.grid;
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(canvas.width, y * CELL); ctx.stroke();
+    }
+
+    // Food glow
+    const [fx, fy] = food;
+    const glow = ctx.createRadialGradient(
+      fx*CELL + CELL/2, fy*CELL + CELL/2, 2,
+      fx*CELL + CELL/2, fy*CELL + CELL/2, CELL
+    );
+    glow.addColorStop(0, '#f9731680');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(fx*CELL - CELL/2, fy*CELL - CELL/2, CELL*2, CELL*2);
+
+    // Food
+    ctx.fillStyle = C.food;
+    roundRect(fx*CELL + 3, fy*CELL + 3, CELL - 6, CELL - 6, 5);
+    ctx.fill();
+
+    // Snake body (tail to neck)
+    for (let i = snake.length - 1; i >= 1; i--) {
+      const t = 1 - i / snake.length;
+      ctx.fillStyle = lerpColor(C.tail, C.body, t);
+      const [sx, sy] = snake[i];
+      roundRect(sx*CELL + 2, sy*CELL + 2, CELL - 4, CELL - 4, 4);
+      ctx.fill();
+    }
+
+    // Head
+    const [hx, hy] = snake[0];
+    const grad = ctx.createLinearGradient(hx*CELL, hy*CELL, (hx+1)*CELL, (hy+1)*CELL);
+    grad.addColorStop(0, '#6ee7a0');
+    grad.addColorStop(1, C.head);
+    ctx.fillStyle = grad;
+    roundRect(hx*CELL + 1, hy*CELL + 1, CELL - 2, CELL - 2, 6);
+    ctx.fill();
+
+    // Eyes
+    const [dx, dy] = dir;
+    const ex = hx*CELL + CELL/2 + dx*(CELL*0.22);
+    const ey = hy*CELL + CELL/2 + dy*(CELL*0.22);
+    const perp = [-dy, dx];
+    const eyeR = CELL * 0.11;
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = C.eye;
+      ctx.beginPath();
+      ctx.arc(ex + perp[0]*side*CELL*0.2, ey + perp[1]*side*CELL*0.2, eyeR, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function lerpColor(a, b, t) {
+    const parse = c => [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)];
+    const [ar,ag,ab] = parse(a), [br,bg,bb] = parse(b);
+    const r = Math.round(ar + (br-ar)*t).toString(16).padStart(2,'0');
+    const g = Math.round(ag + (bg-ag)*t).toString(16).padStart(2,'0');
+    const bl = Math.round(ab + (bb-ab)*t).toString(16).padStart(2,'0');
+    return `#${r}${g}${bl}`;
+  }
+
+  /* ── Tick ── */
+  function tick() {
+    dir = nextDir;
+    const [hx, hy] = snake[0];
+    const [dx, dy] = dir;
+    const nx = (hx + dx + COLS) % COLS;
+    const ny = (hy + dy + ROWS) % ROWS;
+
+    // Self-collision
+    const hit = snake.some(([sx, sy]) => sx === nx && sy === ny);
+    if (hit) { gameOver(); return; }
+
+    snake.unshift([nx, ny]);
+
+    if (nx === food[0] && ny === food[1]) {
+      score += 10;
+      const newLevel = Math.floor(score / 50) + 1;
+      if (newLevel > level) {
+        level = newLevel;
+        speed = levelSpeed(level);
+        reschedule();
+      }
+      food = spawnFood();
+      updateHUD();
+    } else {
+      snake.pop();
+    }
+
+    draw();
+  }
+
+  let timeout;
+  function reschedule() {
+    clearTimeout(timeout);
+    if (alive) timeout = setTimeout(gameLoop, speed);
+  }
+
+  function gameLoop() {
+    tick();
+    if (alive) timeout = setTimeout(gameLoop, speed);
+  }
+
+  function startGame() {
+    clearTimeout(timeout);
+    init();
+    overlay.classList.add('hidden');
+    draw();
+    timeout = setTimeout(gameLoop, speed);
+  }
+
+  function gameOver() {
+    alive = false;
+    clearTimeout(timeout);
+    if (score > highScore) highScore = score;
+    updateHUD();
+
+    overlayTitle.textContent = 'Game Over';
+    overlayTitle.className = 'overlay-title game-over';
+    overlaySub.textContent = `You scored ${score} points · Level ${level}`;
+    startBtn.textContent = 'Play Again';
+    overlay.classList.remove('hidden');
+  }
+
+  /* ── Input ── */
+  const KEY_MAP = {
+    ArrowUp:'UP', ArrowDown:'DOWN', ArrowLeft:'LEFT', ArrowRight:'RIGHT',
+    w:'UP', s:'DOWN', a:'LEFT', d:'RIGHT',
+    W:'UP', S:'DOWN', A:'LEFT', D:'RIGHT',
+  };
+
+  document.addEventListener('keydown', e => {
+    const d = KEY_MAP[e.key];
+    if (!d) return;
+    e.preventDefault();
+    if (!alive) return;
+    if (d !== OPP[dirName()]) nextDir = DIR[d];
+  });
+
+  function dirName() {
+    return Object.keys(DIR).find(k => DIR[k][0]===dir[0] && DIR[k][1]===dir[1]);
+  }
+
+  document.querySelectorAll('.dpad-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = btn.dataset.dir;
+      if (!alive) return;
+      if (d !== OPP[dirName()]) nextDir = DIR[d];
+    });
+  });
+
+  startBtn.addEventListener('click', startGame);
+
+  /* ── Initial draw ── */
+  init();
+  draw();
+</script>
+</body>
+</html>
